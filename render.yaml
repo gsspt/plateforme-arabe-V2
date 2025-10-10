@@ -5,9 +5,9 @@ services:
     plan: free
     buildCommand: |
         sudo apt-get update
-        sudo apt-get install -y poppler-utils  # ← CRUCIAL pour pdf2image
+        sudo apt-get install -y poppler-utils
         pip install -r requirements.txt
     startCommand: gunicorn run:app
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: 3.12.8
