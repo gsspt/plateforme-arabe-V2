@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Analyseur Morphologique Arabe - V2{% endblock %}
+
+{% block content %}
+<div class="container">
+    <header class="page-header">
+        <h1>Analyseur Morphologique</h1>
+    </header>
+
+    <div class="analyzer-container">
+        <div class="search-section">
+            <div class="input-group">
+                <input type="text" id="arabic-input" placeholder="Entrez un mot arabe..." dir="rtl">
+                <button id="analyze-btn" class="btn btn-primary">
+                    <span class="btn-text">Analyser</span>
+                    <div class="btn-spinner hidden"></div>
+                </button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Analyse morphologique en cours...</p>
+            <p class="loading-details">Recherche des racines et formes dérivées</p>
+        </div>
+
+        <div id="error" class="error hidden">
+            <!-- Les erreurs seront affichées ici -->
+        </div>
+
+        <div id="results" class="results hidden">
+            <!-- Les résultats seront injectés ici par JavaScript -->
+        </div>
+
+        <div class="analyzer-info">
+            <h4>À propos de l'analyseur</h4>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>Base de données:</strong> 
+                    <span id="db-stats">Chargement...</span>
+                </div>
+                <div class="info-item">
+                    <strong>Algorithmes:</strong> Analyse morphologique Buckwalter
+                </div>
+                <div class="info-item">
+                    <strong>Support:</strong> Verbes, noms, adjectifs, mots fonctionnels
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/analyzer.js') }}"></script>
+<script>
+// Chargement des stats de la base de données
+fetch('/api/stats')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.usage_stats) {
+            const analyzeStats = data.usage_stats.find(s => s.endpoint === 'analyze');
+            document.getElementById('db-stats').textContent = 
+                analyzeStats ? `${analyzeStats.total_count} analyses effectuées` : 'Prêt';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Réseau des Racines Arabes - V2{% endblock %}
+
+{% block content %}
+<div id="loading">
+    <div class="loader"></div>
+    <p>Chargement des données du réseau...</p>
+</div>
+
+<div id="header">
+    <h1>Réseau sémantique</h1>
+    <br>
+
+    <p>Visualisez les connections sémantiques entre les racines arabes. Cliquer sur une racine pour voir ses dérivés et leurs synonymes les plus proches.</p>
+    <br>
+    
+    <div id="controls">
+        <div class="control-group">
+            <input type="text" id="search" placeholder="Rechercher une racine..." dir="rtl">
+        </div>
+
+        <div class="control-group">
+            <button id="reset-view" class="btn btn-secondary">Réinitialiser la vue</button>
+            <button id="export-graph" class="btn btn-secondary">Exporter</button>
+        </div>
+        
+        <div class="control-group">
+            <div class="slider-container">
+                <label for="size-filter">Filtrer par productivité :</label>
+                <input type="range" id="size-filter" min="1" max="50" value="5">
+                <span id="size-value">5</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <div class="slider-container" id="links-control">
+                <label for="links-filter">Arêtes visibles :</label>
+                <input type="range" id="links-filter" min="50" max="1000" value="500" step="50">
+                <span id="links-value">500</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="main-container">
+    <div id="graph-container"></div>
+    
+    <div id="detail-panel">
+        <button id="close-panel">×</button>
+        <div id="panel-content">
+            <div class="panel-placeholder">
+                <p>Cliquez sur un nœud pour voir les détails</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="network-info">
+    <div class="info-section">
+        <h4> Statistiques du réseau</h4>
+        <div class="stats-grid" id="network-stats">
+            <div class="stat-item">
+                <span class="stat-number" id="node-count">0</span>
+                <span class="stat-label">Nœuds</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="link-count">0</span>
+                <span class="stat-label">Connexions</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="community-count">0</span>
+                <span class="stat-label">Communautés</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="{{ url_for('static', filename='js/network.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Plateforme Éducative Arabe V2{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Segoe+UI:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="main-nav">
+            <div class="nav-brand">
+                <a href="/">Plateforme pour l'arabisant</a>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Accueil</a>
+                <a href="/analyze" class="nav-link">Analyse morphologique</a>
+                <a href="/network" class="nav-link">Réseau sémantique</a>
+                <a href="/ocr" class="nav-link">Numérisation et Traduction</a>
+            </div>
+        </nav>
+
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer>
+            <div class="footer-content">
+                <p>Plateforme éducative arabe V2 - Développé pour l'apprentissage linguistique</p>
+                <div class="footer-links">
+                    <a href="/api/stats" target="_blank">Statistiques</a>
+                    <span>•</span>
+                    <a href="/api/search-history">Historique</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    {% block scripts %}{% endblock %}
+    
+    <!-- Scripts globaux -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

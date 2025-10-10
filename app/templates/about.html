@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}À propos - Plateforme Éducative Arabe V2{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>À propos de la plateforme</h1>
+    <p>Explorez la langue arabe à travers sa morphologie et sa sémantique</p>
+</div>
+
+<div class="container">
+    <div class="about-content">
+        <div class="about-section">
+            <h2>🎯 Mission</h2>
+            <p>
+                La Plateforme Éducative Arabe V2 est un outil avancé d'analyse linguistique 
+                conçu pour les étudiants, chercheurs et passionnés de la langue arabe. 
+                Notre mission est de rendre accessible la complexité et la richesse 
+                morphologique de l'arabe à travers des technologies modernes.
+            </p>
+        </div>
+
+        <div class="about-section">
+            <h2>🔧 Technologies</h2>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <h4>Backend</h4>
+                    <ul>
+                        <li>Python Flask</li>
+                        <li>Base de données SQLite</li>
+                        <li>Système de cache</li>
+                        <li>Rate limiting</li>
+                    </ul>
+                </div>
+                <div class="tech-item">
+                    <h4>Analyse Linguistique</h4>
+                    <ul>
+                        <li>Transliteration Buckwalter</li>
+                        <li>Analyse morphologique</li>
+                        <li>Réseaux sémantiques</li>
+                        <li>Base de données lexicale</li>
+                    </ul>
+                </div>
+                <div class="tech-item">
+                    <h4>Frontend</h4>
+                    <ul>
+                        <li>HTML5/CSS3 moderne</li>
+                        <li>JavaScript ES6+</li>
+                        <li>D3.js pour la visualisation</li>
+                        <li>Design responsive</li>
+                    </ul>
+                </div>
+                <div class="tech-item">
+                    <h4>OCR</h4>
+                    <ul>
+                        <li>Google Vision API</li>
+                        <li>Traitement d'images PDF</li>
+                        <li>Optimisation pour l'arabe</li>
+                        <li>Gestion RTL</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="about-section">
+            <h2>📊 Fonctionnalités Principales</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h4>🔍 Analyseur Morphologique</h4>
+                    <p>Analyse complète des mots arabes : racines, formes verbales, dérivés et catégories grammaticales.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🌐 Réseau des Racines</h4>
+                    <p>Visualisation interactive des connections sémantiques entre les racines arabes.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📄 OCR Arabe</h4>
+                    <p>Reconnaissance de texte arabe dans les documents PDF avec Google Vision.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>💾 Gestion des Données</h4>
+                    <p>Historique des recherches, favoris et statistiques d'usage.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="about-section">
+            <h2>📈 Statistiques</h2>
+            <div class="stats-container" id="about-stats">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-analyses">0</div>
+                    <div class="stat-label">Analyses effectuées</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-ocr">0</div>
+                    <div class="stat-label">Documents OCR traités</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-roots">0</div>
+                    <div class="stat-label">Racines dans la base</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-words">0</div>
+                    <div class="stat-label">Mots analysables</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="about-section">
+            <h2>🔮 Roadmap</h2>
+            <div class="roadmap">
+                <div class="roadmap-phase">
+                    <h4>Phase 1 - Terminée ✅</h4>
+                    <ul>
+                        <li>Analyseur morphologique de base</li>
+                        <li>Visualisation réseau D3.js</li>
+                        <li>OCR Google Vision</li>
+                        <li>Interface utilisateur</li>
+                    </ul>
+                </div>
+                <div class="roadmap-phase">
+                    <h4>Phase 2 - En cours 🚧</h4>
+                    <ul>
+                        <li>Base de données relationnelle</li>
+                        <li>Système de cache avancé</li>
+                        <li>API RESTful complète</li>
+                        <li>Gestion des favoris et historique</li>
+                    </ul>
+                </div>
+                <div class="roadmap-phase">
+                    <h4>Phase 3 - À venir 🔮</h4>
+                    <ul>
+                        <li>Export des résultats (PDF, JSON)</li>
+                        <li>Analyses comparatives</li>
+                        <li>Exercices interactifs</li>
+                        <li>API publique</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateAboutStats(data);
+            }
+        });
+
+    function updateAboutStats(data) {
+        const stats = data.usage_stats || [];
+        const analyzeStats = stats.find(s => s.endpoint === 'analyze');
+        const ocrStats = stats.find(s => s.endpoint === 'ocr');
+        const networkStats = stats.find(s => s.endpoint === 'network');
+
+        document.getElementById('total-analyses').textContent = 
+            analyzeStats ? analyzeStats.total_count : '0';
+        document.getElementById('total-ocr').textContent = 
+            ocrStats ? ocrStats.total_count : '0';
+        
+        // Valeurs estimées pour la démo
+        document.getElementById('total-roots').textContent = '1,200+';
+        document.getElementById('total-words').textContent = '50,000+';
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Accueil - Plateforme Éducative Arabe V2{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="hero-content">
+        <h1>Plateforme Éducative Arabe V2</h1>
+        <p class="hero-subtitle">Explorez la richesse de la langue arabe à travers des outils avancés d'analyse linguistique</p>
+        
+        <div class="feature-cards">
+            <a href="/analyze" class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h3>Analyseur Morphologique</h3>
+                <p>Analysez n'importe quel mot arabe : découvrez sa racine, ses formes verbales et ses dérivés</p>
+                <div class="feature-stats" id="analyze-stats">
+                    <span>Chargement des stats...</span>
+                </div>
+            </a>
+            
+            <a href="/network" class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <h3>Réseau des Racines</h3>
+                <p>Visualisez les connections sémantiques entre les racines arabes de manière interactive</p>
+                <div class="feature-stats" id="network-stats">
+                    <span>Chargement des stats...</span>
+                </div>
+            </a>
+            
+            <a href="/ocr" class="feature-card">
+                <div class="feature-icon">📄</div>
+                <h3>OCR et Traducteur</h3>
+                <p>Numérisez et extrayez le texte arabe de vos documents PDF avec Google Vision OCR</p>
+                <div class="feature-stats" id="ocr-stats">
+                    <span>Chargement des stats...</span>
+                </div>
+            </a>
+        </div>
+
+        <div class="quick-actions">
+            <h3>Recherches Rapides</h3>
+            <div class="quick-search-buttons">
+                <button class="quick-btn" data-word="كتاب">كتاب</button>
+                <button class="quick-btn" data-word="يكتب">يكتب</button>
+                <button class="quick-btn" data-word="مكتب">مكتب</button>
+                <button class="quick-btn" data-word="كتابة">كتابة</button>
+                <button class="quick-btn" data-word="عليم">عليم</button>
+            </div>
+        </div>
+
+        <div class="recent-searches" id="recent-searches">
+            <h3>Recherches Récentes</h3>
+            <div class="searches-list">
+                <!-- Chargé dynamiquement -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Chargement des statistiques
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateStats(data);
+                updateRecentSearches(data.recent_searches);
+            }
+        });
+
+    // Boutons de recherche rapide
+    document.querySelectorAll('.quick-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const word = this.getAttribute('data-word');
+            window.location.href = `/analyze?word=${encodeURIComponent(word)}`;
+        });
+    });
+
+    function updateStats(data) {
+        const stats = data.usage_stats || [];
+        const analyzeStats = stats.find(s => s.endpoint === 'analyze');
+        const networkStats = stats.find(s => s.endpoint === 'network');
+        const ocrStats = stats.find(s => s.endpoint === 'ocr');
+
+        document.getElementById('analyze-stats').innerHTML = 
+            analyzeStats ? `${analyzeStats.total_count} analyses` : '0 analyses';
+        document.getElementById('network-stats').innerHTML = 
+            networkStats ? `${networkStats.total_count} visualisations` : '0 visualisations';
+        document.getElementById('ocr-stats').innerHTML = 
+            ocrStats ? `${ocrStats.total_count} documents` : '0 documents';
+    }
+
+    function updateRecentSearches(searches) {
+        const container = document.querySelector('.searches-list');
+        if (!searches || searches.length === 0) {
+            container.innerHTML = '<p class="no-searches">Aucune recherche récente</p>';
+            return;
+        }
+
+        container.innerHTML = searches.map(search => `
+            <div class="search-item">
+                <span class="arabic-word">${search.word_arabic}</span>
+                <span class="search-info">
+                    ${search.roots_found ? JSON.parse(search.roots_found).length : 0} racines
+                </span>
+            </div>
+        `).join('');
+    }
+});
+</script>
+{% endblock %}

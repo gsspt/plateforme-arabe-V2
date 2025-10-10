@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}OCR Arabe - V2{% endblock %}
+
+{% block content %}
+<div class="container">
+    <header class="page-header">
+        <h1>Numérisation</h1>
+        <p>Uploader un PDF contenant du texte arabe non-sélectionnable pour le convertir en texte numérique.</p>
+    </header>
+
+    <div class="info-column">
+        <h4>Mise en garde</h4>
+        <p>Une fois la numérisation effectuée, vous aurez la possibilité de traduire ce texte. Ces deux fonctionnalités utilisent l'intelligence artificielle et impliquent ainsi un résultat performant mais imparfait.</p>
+
+    </div>
+
+    <div class="ocr-section">
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-content">
+                <div class="upload-icon"></div>
+                <h3>Déposez votre PDF ici</h3>
+                <p>ou cliquez pour parcourir vos fichiers</p>
+                <input type="file" id="pdfInput" accept=".pdf" hidden>
+                <button class="btn btn-primary" onclick="document.getElementById('pdfInput').click()">
+                    Choisir un PDF
+                </button>
+            </div>
+        </div>
+
+        <div class="file-info" id="fileInfo" style="display: none;">
+            <div class="file-details">
+                <div class="file-main">
+                    <span class="file-icon">📄</span>
+                    <div class="file-text">
+                        <span class="file-name" id="fileName"></span>
+                        <span class="file-size" id="fileSize"></span>
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="clearFile()">✕ Supprimer</button>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn btn-primary" id="processBtn" onclick="processOCR()" disabled>
+                <span class="btn-text">Lancer la reconnaissance OCR</span>
+                <div class="btn-spinner hidden"></div>
+            </button>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Reconnaissance OCR en cours...</p>
+            <p class="loading-details">Extraction du texte arabe depuis le PDF avec Google Vision</p>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+        </div>
+
+        <div id="error" class="error hidden">
+            <!-- Les erreurs seront affichées ici -->
+        </div>
+
+        <div id="results" class="results hidden">
+            <div class="results-header">
+                <h3> Texte Extraits</h3>
+                <div class="results-stats">
+                    <span id="charCount">0 caractères</span>
+                    <div class="result-actions">
+                        <button class="btn btn-secondary" onclick="copyToClipboard()">Copier</button>
+                        <button class="btn btn-secondary" onclick="downloadText()">Télécharger</button>
+                        <button class="btn btn-secondary" onclick="clearResults()">Effacer</button>
+                        <div class="export-actions">
+                            <button class="btn btn-success" onclick="translationManager.exportOCRWord()">
+                                 Exporter OCR en Word
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="text-output" id="textOutput">
+                <!-- Le texte OCR sera affiché ici -->
+            </div>
+        </div>
+
+                <!-- ✅ NOUVELLE SECTION TRADUCTION -->
+        <div id="translationSection" class="translation-section" style="display: none;">
+            <div class="translation-header">
+                <h3>Traduction</h3>
+                <br>
+                <div class="translation-actions">
+                    <button class="btn btn-primary" id="translateBtn" onclick="translationManager.translateText()">
+                        <span class="btn-text">🔄 Traduire en Français</span>
+                        <div class="btn-spinner hidden"></div>
+                    </button>
+                    <button class="btn btn-secondary" onclick="translationManager.showContextModal()">
+                        Contexte
+                    </button>
+                </div>
+                        <p>N'oubliez pas de préciser le contexte.</p>
+
+            </div>
+
+            <!-- Contexte de traduction (caché par défaut) -->
+            <div id="translationContext" class="translation-context" style="display: none;">
+                <h4>Contexte de Traduction</h4>
+                <div class="context-grid">
+                    <div class="context-field">
+                        <label>Auteur:</label>
+                        <input type="text" id="contextAuthor" placeholder="Auteur du texte">
+                    </div>
+                    <div class="context-field">
+                        <label>Titre:</label>
+                        <input type="text" id="contextTitle" placeholder="Titre du document">
+                    </div>
+                    <div class="context-field">
+                        <label>Sujet:</label>
+                        <input type="text" id="contextSubject" placeholder="Sujet principal">
+                    </div>
+                    <div class="context-field">
+                        <label>Genre:</label>
+                        <input type="text" id="contextGenre" placeholder="Genre littéraire">
+                    </div>
+                    <div class="context-field">
+                        <label>Niveau de langue:</label>
+                        <select id="contextLevel">
+                            <option value="Standard">Standard</option>
+                            <option value="Littéraire">Littéraire</option>
+                            <option value="Formel">Formel</option>
+                            <option value="Informel">Informel</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="context-actions">
+                    <button class="btn btn-primary" onclick="translationManager.saveContext()">
+                        Sauvegarder
+                    </button>
+                    <button class="btn btn-secondary" onclick="translationManager.hideContext()">
+                        Fermer
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chargement traduction -->
+            <div id="translationLoading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Traduction en cours...</p>
+                <p class="loading-details">Traduction arabe → français avec DeepSeek AI</p>
+            </div>
+
+            <!-- Erreur traduction -->
+            <div id="translationError" class="error hidden">
+                <!-- Les erreurs de traduction seront affichées ici -->
+            </div>
+
+            <!-- Résultats traduction -->
+            <div id="translationResults" class="translation-results hidden">
+                <div class="results-header">
+                    <h4>Texte Traduit</h4>
+                    <div class="result-actions">
+                        <button class="btn btn-secondary" onclick="translationManager.copyTranslation()">
+                            Copier
+                        </button>
+                        <button class="btn btn-secondary" onclick="translationManager.downloadTranslation()">
+                            Télécharger
+                        </button>
+                        <div class="export-actions">
+                            <button class="btn btn-success" onclick="translationManager.exportTranslationWord()">
+                                Exporter Traduction en Word
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="translation-output" id="translationOutput">
+                    <!-- La traduction sera affichée ici -->
+                </div>
+            </div>
+        </div>
+        <!-- Fin section traduction -->
+
+        <div class="ocr-info">
+            <div class="info-grid">
+                <div class="info-column">
+                    <h4>Technologies utilisées</h4>
+                    <ul>
+                        <li>Reconnaissance de caractères : Google Vision OCR</li>
+                        <li>Traduction : DeepSeek API</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/translation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ocr.js') }}"></script>
+
+<script>
+// Pas besoin d'initialisation manuelle supplémentaire
+// translation.js gère tout automatiquement
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 OCR et Translation chargés');
+});
+</script>   
+
+{% endblock %}
