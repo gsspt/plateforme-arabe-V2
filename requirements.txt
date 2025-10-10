@@ -13,7 +13,7 @@ google-cloud-vision==3.4.4
 google-api-python-client==2.108.0
 
 # PDF Processing
-PyMuPDF==1.23.8
+PyMuPDF==1.23.6
 Pillow==10.1.0
 
 # Data Processing
