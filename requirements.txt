@@ -1,3 +1,5 @@
+gunicorn==21.2.0
+
 # Flask & Web Framework
 Flask==2.3.3
 Flask-CORS==4.0.0
@@ -31,4 +33,5 @@ pytest-flask==1.2.0
 black==23.11.0
 flake8==6.1.0
 
-gunicorn==21.2.0
+# Word Document Processing ← AJOUTEZ CES LIGNES
+python-docx==1.1.0
