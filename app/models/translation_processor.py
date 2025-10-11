@@ -188,7 +188,7 @@ INFORMATIONS:
 
 INSTRUCTIONS:
 1. Traduisez EXCLUSIVEMENT le texte
-2. Pour les termes ambigus: [*note détaillant une explication*] après le terme  
+2. Pour les termes ambigus: [*note : *mot en arabe* - explication détaillée*] après le terme  
 3. AUCUN commentaire, introduction ou texte supplémentaire en dehors des notes
 4. Fidèle au style et niveau de langue
 
