@@ -14,14 +14,18 @@ def create_app():
     CORS(app)
     cache_manager.init_app(app)
     
-    # Création des dossiers nécessaires - SEULEMENT si n'existent pas
+    # Création des dossiers nécessaires
     os.makedirs('uploads', exist_ok=True)
     
     # Enregistrement des blueprints
     app.register_blueprint(views.main_bp)
     app.register_blueprint(api.api_bp, url_prefix='/api')
     
-    # Validation de la configuration (non bloquante)
+    # Validation de la configuration
     Config.validate_configuration()
     
     return app
+
+# ⭐⭐ LIGNE CRUCIALE ⭐⭐
+# Export direct de l'application pour Gunicorn
+app = create_app()
