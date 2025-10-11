@@ -30,6 +30,11 @@ class Config:
     BUCKWALTER_DATA_PATH = os.path.join(BASE_DIR, 'data/buckwalter')
     NETWORK_DATA_PATH = os.path.join(BASE_DIR, 'data/network_data.json')
     
+    # Paramètres API externes
+    TRANSLATION_MAX_TOKENS = 2000
+    TRANSLATION_TIMEOUT = 120
+    DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+
     @classmethod
     def validate_configuration(cls):
         """Validation non-bloquante pour la production"""

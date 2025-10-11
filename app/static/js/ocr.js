@@ -93,7 +93,7 @@ class OCRProcessor {
         processBtn.disabled = !enabled;
         
         if (enabled) {
-            btnText.textContent = '🚀 Lancer la reconnaissance OCR';
+            btnText.textContent = 'Lancer la numérisation';
         } else {
             btnText.textContent = 'Sélectionnez un PDF';
         }
@@ -161,7 +161,7 @@ class OCRProcessor {
         const btnSpinner = processBtn.querySelector('.btn-spinner');
 
         loadingDiv.classList.add('hidden');
-        btnText.textContent = '🚀 Lancer la reconnaissance OCR';
+        btnText.textContent = 'Lancer la numérisation';
         btnSpinner.classList.add('hidden');
         processBtn.disabled = false;
 

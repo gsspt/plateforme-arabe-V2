@@ -228,24 +228,19 @@ class OCRProcessor:
         char_count = len(text)
         word_count = len(text.split())
         
-        return f"""✅ OCR GOOGLE VISION - TRAITEMENT TERMINÉ
+        return f"""OCR GOOGLE VISION - TRAITEMENT TERMINÉ
 
-📄 Document: {filename}
-📖 Pages totales: {total_pages}
-✅ Pages avec texte: {successful_pages}
-🔤 Caractères extraits: {char_count}
-📝 Mots détectés: {word_count}
-🌐 Langue: Arabe (optimisé Google Vision)
+Document: {filename}
+Pages totales: {total_pages}
+Pages avec texte: {successful_pages}
+Caractères extraits: {char_count}
+Mots détectés: {word_count}
+Langue: Arabe (optimisé Google Vision)
 
 {'='*50}
 {text}
 {'='*50}
-
-💡 Qualité Google Vision:
-• Reconnaissance précise de l'arabe avec diacritiques
-• Gestion native RTL (droite à gauche)
-• Détection de la mise en page
-• Support des ligatures arabes complexes"""
+"""
 
     def _get_configuration_error(self):
         return "❌ Google Vision OCR non configuré"
