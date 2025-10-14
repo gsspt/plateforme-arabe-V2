@@ -9,19 +9,11 @@
 
 **Une plateforme complète d'analyse linguistique arabe pour la recherche universitaire**
 
-[Fonctionnalités](#fonctionnalités) • [Installation](#installation) • [Utilisation](#utilisation) • [API](#api) • [Structure](#structure) • [Protection Intellectuelle](#protection-intellectuelle)
-
 </div>
 
 ## Présentation
 
-**Plateforme Arabe V2** est une application web sophistiquée destinée aux chercheurs, linguistes et étudiants en études arabes. Elle combine analyse morphologique avancée, reconnaissance de texte (OCR) et traduction contextuelle dans une interface unifiée et professionnelle.
-
-### Public Cible
-- Chercheurs en linguistique arabe
-- Établissements universitaires
-- Centres de recherche en études moyen-orientales
-- Étudiants en master et doctorat
+**Plateforme Arabe V2** est une application web sophistiquée destinée aux chercheurs, linguistes et étudiants en études arabes. Elle combine analyse morphologique, carte sémantique, reconnaissance de texte (OCR) et traduction contextuelle dans une interface unifiée.
 
 ## Fonctionnalités
 
@@ -52,13 +44,24 @@
 - **Exploration des clusters** sémantiques
 - Interface de navigation intuitive
 
-# Protection Intellectuelle
+## Mentions Légales
 
-Cette application intègre des technologies tierces selon leurs conditions d'utilisation :
+### Propriété Intellectuelle
+- **Code source et architecture** : © 2024 [Votre Nom] - Tous droits réservés
+- **Interface utilisateur** : Conception et design propriétaires
+- **Méthodologies de traitement** : Algorithmes et workflows exclusifs
 
-- **Google Vision API** : Usage conforme aux conditions Google
-- **DeepSeek API** : Usage conforme aux conditions DeepSeek  
-- **Buckwalter Morphological Analyzer** : Usage selon licence originale
-- **Arabic WordNet** : Usage selon licence originale
+### Technologies Tierces
+Cette plateforme utilise des services externes selon leurs conditions d'utilisation :
 
-La valeur intellectuelle réside dans l'intégration unique, l'interface spécialisée et les méthodes de traitement développées spécifiquement pour cette plateforme.
+| Technologie | Usage | Restrictions |
+|-------------|-------|--------------|
+| Google Vision API | OCR de documents PDF | Non-redistribution des résultats bruts |
+| DeepSeek API | Traduction contextuelle | Usage conforme au quota et conditions |
+| Buckwalter Morphological Analyzer | Analyse morphologique | Respect de la licence originale |
+| Arabic WordNet | Réseau sémantique | Respect de la licence originale |
+
+### Limitations d'Usage
+- Usage académique et recherche uniquement
+- Interdiction de scraping ou extraction massive
+- Respect des quotas d'API et conditions des services tiers
