@@ -47,7 +47,7 @@
 ## Mentions Légales
 
 ### Propriété Intellectuelle
-- **Code source et architecture** : © 2024 [Votre Nom] - Tous droits réservés
+- **Code source et architecture** : © 2025 [Augustin Pot] - Tous droits réservés
 - **Interface utilisateur** : Conception et design propriétaires
 - **Méthodologies de traitement** : Algorithmes et workflows exclusifs
 
