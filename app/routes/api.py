@@ -57,7 +57,7 @@ def analyze_api():
         # Log usage
         database.log_usage('analyze')
         
-        if result['analyses_directes'] or result['formes_derivees']:
+        if result['analyses_directes'] or result['formes_derivees'] or result['analyses_decomposition']:
             return jsonify(_format_analysis_response(result))
         else:
             return jsonify({'error': f'Aucune analyse trouvée pour "{word}"'}), 404
@@ -194,7 +194,23 @@ def _format_analysis_response(result):
             'glose': safe_get(form, 'glose', 'Aucune traduction disponible'),
             'lemme_id': safe_get(form, 'lemme_id', '')
         })
-    
+
+    # Formes par décomposition (préfixe + radical + suffixe)
+    decomposition_forms_formatted = []
+    for form in result.get('analyses_decomposition', []):
+        decomposition_forms_formatted.append({
+            'forme_arabe':       safe_get(form, 'forme_complete'),
+            'forme_buckwalter':  safe_get(form, 'radical_vocalise', ''),
+            'categorie':         safe_get(form, 'radical_categorie'),
+            'pos':               safe_get(form, 'radical_pos'),
+            'glose':             safe_get(form, 'radical_glose', 'Aucune traduction disponible'),
+            'radical_ar':        safe_get(form, 'radical_ar'),
+            'prefixe_ar':        form.get('prefixe_ar', ''),
+            'prefixe_glose':     form.get('prefixe_glose', ''),
+            'suffixe_ar':        form.get('suffixe_ar', ''),
+            'suffixe_glose':     form.get('suffixe_glose', ''),
+        })
+
     return {
         'input_word': result['mot_arabe'],
         'input_buckwalter': result['mot_buckwalter'],
@@ -202,10 +218,12 @@ def _format_analysis_response(result):
         'roots_found_buckwalter': result['racines_trouvees'],
         'direct_forms': direct_forms_formatted,
         'derived_forms': derived_forms_flat,
+        'decomposition_forms': decomposition_forms_formatted,
         'analysis_summary': {
             'total_direct_forms': len(result['analyses_directes']),
             'total_roots': len(result['racines_trouvees']),
-            'total_derived_forms': len(derived_forms_flat)
+            'total_derived_forms': len(derived_forms_flat),
+            'total_decomposition_forms': len(decomposition_forms_formatted)
         }
     }
 
