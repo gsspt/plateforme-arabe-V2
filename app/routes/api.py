@@ -122,6 +122,16 @@ def get_network_json():
         logger.error(f"❌ Erreur chargement network_data.json: {e}")
         return jsonify({"error": "Fichier de données non trouvé"}), 500
 
+@api_bp.route('/suggest')
+@limiter.limit("300 per minute")
+def suggest():
+    """Suggestions depuis le lexique morphologique complet."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 1:
+        return jsonify({'suggestions': []})
+    results = analyzer.suggest_words(q, limit=10)
+    return jsonify({'suggestions': results})
+
 @api_bp.route('/favorites', methods=['POST'])
 def add_favorite():
     """API pour ajouter un mot aux favoris"""

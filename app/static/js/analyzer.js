@@ -1,4 +1,96 @@
 // analyzer.js - Analyseur morphologique arabe V2
+
+class Autocomplete {
+    constructor(inputEl, dropdownEl, onSelect) {
+        this.input = inputEl;
+        this.dropdown = dropdownEl;
+        this.onSelect = onSelect;
+        this.activeIndex = -1;
+        this.items = [];
+        this._debounceTimer = null;
+
+        this.input.addEventListener('input', () => this._onInput());
+        this.input.addEventListener('keydown', (e) => this._onKeydown(e));
+        document.addEventListener('click', (e) => {
+            if (!this.input.contains(e.target) && !this.dropdown.contains(e.target)) {
+                this.hide();
+            }
+        });
+    }
+
+    _onInput() {
+        clearTimeout(this._debounceTimer);
+        const q = this.input.value.trim();
+        if (q.length < 1) { this.hide(); return; }
+        this._debounceTimer = setTimeout(() => this._fetch(q), 220);
+    }
+
+    async _fetch(q) {
+        try {
+            const res = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            this._render(data.suggestions || []);
+        } catch (_) {
+            this.hide();
+        }
+    }
+
+    _render(items) {
+        // items: string[] (legacy) ou {word, glose, pos}[]
+        this.items = items.map(s => typeof s === 'string' ? { word: s, glose: '', pos: '' } : s);
+        this.activeIndex = -1;
+        if (this.items.length === 0) { this.hide(); return; }
+
+        this.dropdown.innerHTML = this.items.map((item, i) =>
+            `<li class="autocomplete-item" role="option" data-index="${i}" data-word="${item.word}">
+                <span class="ac-word">${item.word}</span>
+                ${item.glose ? `<span class="ac-glose">${item.glose}</span>` : ''}
+            </li>`
+        ).join('');
+
+        this.dropdown.querySelectorAll('.autocomplete-item').forEach(li => {
+            li.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                this.onSelect(li.getAttribute('data-word'));
+                this.hide();
+            });
+        });
+
+        this.dropdown.classList.remove('hidden');
+    }
+
+    _onKeydown(e) {
+        if (this.dropdown.classList.contains('hidden')) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            this._setActive(Math.min(this.activeIndex + 1, this.items.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            this._setActive(Math.max(this.activeIndex - 1, -1));
+        } else if (e.key === 'Enter' && this.activeIndex >= 0) {
+            e.preventDefault();
+            this.onSelect(this.items[this.activeIndex].word);
+            this.hide();
+        } else if (e.key === 'Escape') {
+            this.hide();
+        }
+    }
+
+    _setActive(index) {
+        this.activeIndex = index;
+        this.dropdown.querySelectorAll('.autocomplete-item').forEach((li, i) => {
+            li.classList.toggle('autocomplete-active', i === index);
+        });
+    }
+
+    hide() {
+        this.dropdown.classList.add('hidden');
+        this.dropdown.innerHTML = '';
+        this.items = [];
+        this.activeIndex = -1;
+    }
+}
+
 class ArabicAnalyzer {
     constructor() {
         this.apiUrl = '/api/analyze';
@@ -6,6 +98,17 @@ class ArabicAnalyzer {
         this.currentResults = null;
         this.initializeEventListeners();
         this.loadFromURL();
+        this._initAutocomplete();
+    }
+
+    _initAutocomplete() {
+        const input = document.getElementById('arabic-input');
+        const dropdown = document.getElementById('autocomplete-dropdown');
+        if (!input || !dropdown) return;
+        this.autocomplete = new Autocomplete(input, dropdown, (word) => {
+            input.value = word;
+            this.analyzeWord();
+        });
     }
 
     initializeEventListeners() {
@@ -129,11 +232,12 @@ class ArabicAnalyzer {
         const resultsDiv = document.getElementById('results');
         resultsDiv.innerHTML = this.generateResultsHTML(data);
         resultsDiv.classList.remove('hidden');
+        document.getElementById('clear-btn')?.classList.remove('hidden');
         this.initializeExpandButtons();
         this.initializeShowMoreButtons();
         this.initializeExportButtons();
         this.initializePosFilter();
-        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     // Boutons d'expansion des cartes compactes
@@ -201,69 +305,133 @@ class ArabicAnalyzer {
     }
 
     generateResultsHTML(data) {
-        const allAnalyses = [...data.direct_forms, ...(data.decomposition_forms || [])];
-        const totalAnalyses = allAnalyses.length;
-        const totalDerived  = data.derived_forms.length;
+        const directForms  = data.direct_forms || [];
+        const decompForms  = data.decomposition_forms || [];
+        const allAnalyses  = [...directForms, ...decompForms];
+        const derivedForms = data.derived_forms || [];
 
-        // Collecte les POS distincts pour le filtre
-        const posSet = new Set(data.derived_forms.map(f => f.pos).filter(Boolean));
-        const posFilterHTML = posSet.size > 1 ? `
-            <div class="pos-filter">
-                <button class="pos-filter-btn active" data-pos="ALL">Tous</button>
-                ${[...posSet].map(p => `<button class="pos-filter-btn" data-pos="${p}">${this.formatPOS(p)}</button>`).join('')}
-            </div>` : '';
+        // ── En-tête compact ──────────────────────────────────────────────────
+        const rootsDisplay = data.roots_found.length > 0
+            ? data.roots_found.map(r => `<a href="/analyze?word=${encodeURIComponent(r)}" class="root-anchor">${r}</a>`).join(' · ')
+            : '—';
 
-        return `
+        const header = `
             <div class="result-header">
-                <div class="result-word">${data.input_word}</div>
-                <div class="result-meta">
-                    ${data.roots_found.length > 0
-                        ? `<span class="meta-pill">Racine${data.roots_found.length > 1 ? 's' : ''} : ${data.roots_found.join(', ')}</span>`
-                        : ''}
-                    <span class="meta-pill">${totalAnalyses} analyse${totalAnalyses > 1 ? 's' : ''}</span>
-                    ${totalDerived > 0 ? `<span class="meta-pill">${totalDerived} formes dérivées</span>` : ''}
-                </div>
-            </div>
+                <span class="result-word">${data.input_word}</span>
+                <span class="result-root-label">Racine${data.roots_found.length > 1 ? 's' : ''} : ${rootsDisplay}</span>
+                <span class="result-counts">${allAnalyses.length} analyse${allAnalyses.length > 1 ? 's' : ''}</span>
+            </div>`;
 
-            ${allAnalyses.length > 0 ? `
-                <div class="section">
-                    <div class="section-label">Analyses du mot</div>
-                    <div class="form-list compact">
-                        ${data.direct_forms.map(form => this.generateFormItemCompact(form, 'direct')).join('')}
-                        ${(data.decomposition_forms || []).map(form => this.generateDecompositionItem(form)).join('')}
+        // ── Tableau d'analyses ───────────────────────────────────────────────
+        let analysesHTML = '';
+        if (allAnalyses.length > 0) {
+            const directRows = directForms.map(f => this._tableRowDirect(f)).join('');
+            const decompRows = decompForms.map(f => this._tableRowDecomp(f)).join('');
+            analysesHTML = `
+            <div class="section">
+                <div class="section-label">Analyses du mot</div>
+                <table class="analysis-table">
+                    <thead>
+                        <tr>
+                            <th class="col-arabic">Forme</th>
+                            <th class="col-glose">Sens</th>
+                            <th class="col-pos">POS</th>
+                            <th class="col-root">Racine</th>
+                            <th class="col-form">Forme</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${directRows}
+                        ${decompRows}
+                    </tbody>
+                </table>
+            </div>`;
+        }
+
+        // ── Filtre POS + formes dérivées ─────────────────────────────────────
+        let derivedHTML = '';
+        if (derivedForms.length > 0) {
+            const posSet = new Set(derivedForms.map(f => f.pos).filter(Boolean));
+            const posFilterHTML = posSet.size > 1 ? `
+                <div class="pos-filter">
+                    <button class="pos-filter-btn active" data-pos="ALL">Tous</button>
+                    ${[...posSet].map(p => `<button class="pos-filter-btn" data-pos="${p}">${this.formatPOS(p)}</button>`).join('')}
+                </div>` : '';
+            derivedHTML = `
+            <div class="section">
+                <div class="section-label-row">
+                    <span class="section-label">Formes dérivées <span class="count-badge">${derivedForms.length}</span></span>
+                    <div class="section-actions">
+                        ${posFilterHTML}
+                        <button class="btn btn-secondary export-btn" data-format="json">JSON</button>
                     </div>
                 </div>
-            ` : ''}
-
-            ${data.derived_forms.length > 0 ? `
-                <div class="section">
-                    <div class="section-label-row">
-                        <span class="section-label">Formes dérivées</span>
-                        <div class="section-actions">
-                            ${posFilterHTML}
-                            <button class="btn btn-secondary export-btn" data-format="json">JSON</button>
-                        </div>
-                    </div>
-                    <div class="derived-forms-container">
-                        ${this.groupFormsByRoot(data.derived_forms)}
-                    </div>
+                <div class="derived-forms-container">
+                    ${this.groupFormsByRoot(derivedForms)}
                 </div>
-            ` : ''}
+            </div>`;
+        }
 
-            ${allAnalyses.length === 0 && data.derived_forms.length === 0 ? `
-                <div class="section">
-                    <div class="no-results">
-                        <p>Aucune analyse trouvée pour ce mot.</p>
-                        <p>Essayez avec un autre mot ou vérifiez l'orthographe.</p>
-                    </div>
-                </div>
-            ` : ''}
+        const noResults = allAnalyses.length === 0 && derivedForms.length === 0 ? `
+            <div class="section"><div class="no-results">
+                <p>Aucune analyse trouvée pour ce mot.</p>
+                <p>Essayez un autre mot ou vérifiez l'orthographe.</p>
+            </div></div>` : '';
 
+        const actions = `
             <div class="results-actions">
                 <button class="btn btn-secondary" onclick="window.arabicAnalyzer.shareResults()">Partager</button>
                 <button class="btn btn-secondary" onclick="window.arabicAnalyzer.printResults()">Imprimer</button>
-            </div>
-        `;
+            </div>`;
+
+        return header + analysesHTML + derivedHTML + noResults + actions;
+    }
+
+    // ── Ligne du tableau : analyse directe ───────────────────────────────────
+    _tableRowDirect(form) {
+        const glose    = this.cleanGlose(form.gloss || form.glose || '');
+        const verbForm = this.getVerbGroup(form);
+        const posText  = this._posLabel(form.pos, form.categorie);
+        const rootAr   = form.racine_arabe || '';
+        const rootCell = rootAr
+            ? `<a href="/analyze?word=${encodeURIComponent(rootAr)}" class="root-anchor">${rootAr}</a>`
+            : '—';
+        const isPassive = (form.categorie || '').includes('_Pass');
+        return `
+            <tr class="analysis-row${isPassive ? ' passive-row' : ''}" data-pos="${form.pos}">
+                <td class="col-arabic arabic-text">${form.forme_arabe || ''}</td>
+                <td class="col-glose">${glose || '—'}</td>
+                <td class="col-pos"><span class="pos-badge pos-${form.pos}${isPassive ? ' pos-passive' : ''}">${posText}</span></td>
+                <td class="col-root">${rootCell}</td>
+                <td class="col-form">${verbForm || '—'}</td>
+            </tr>`;
+    }
+
+    // ── Ligne du tableau : analyse par décomposition ─────────────────────────
+    _tableRowDecomp(form) {
+        const glose        = this.cleanGlose(form.glose || '');
+        const suffixeGlose = form.suffixe_glose ? this.cleanGlose(form.suffixe_glose) : '';
+        const gloseComplete = (glose && suffixeGlose) ? `${suffixeGlose} ${glose}` : (glose || suffixeGlose);
+        const posText  = this._posLabel(form.pos, form.radical_categorie || form.categorie);
+        const isPassive = (form.radical_categorie || form.categorie || '').includes('_Pass');
+
+        // Décomposition morphologique inline (préfixe + radical + suffixe)
+        const parts = [];
+        if (form.prefixe_ar) parts.push(`<span class="morph-part morph-prefix" title="Préfixe">${form.prefixe_ar}</span>`);
+        if (form.radical_ar) parts.push(`<span class="morph-part morph-stem" title="Radical">${form.radical_ar}</span>`);
+        if (form.suffixe_ar)  parts.push(`<span class="morph-part morph-suffix" title="${suffixeGlose || 'Suffixe'}">${form.suffixe_ar}</span>`);
+        const decompCell = parts.length > 1
+            ? `<span class="morph-breakdown">${parts.join('<span class="morph-sep">·</span>')}</span>`
+            : (form.forme_complete || '');
+
+        return `
+            <tr class="analysis-row decomp-row${isPassive ? ' passive-row' : ''}" data-pos="${form.pos}">
+                <td class="col-arabic arabic-text">${decompCell}</td>
+                <td class="col-glose">${gloseComplete || '—'}</td>
+                <td class="col-pos"><span class="pos-badge pos-${form.pos}${isPassive ? ' pos-passive' : ''}">${posText}</span></td>
+                <td class="col-root">—</td>
+                <td class="col-form">${this.getVerbGroup({lemme_id: form.radical_lemme, categorie: form.radical_categorie}) || '—'}</td>
+            </tr>`;
     }
 
     // Carte compacte : une ligne, expandable au clic
@@ -271,7 +439,9 @@ class ArabicAnalyzer {
     generateFormItemCompact(form, type = 'derived', hidden = false) {
         const group = this.getVerbGroup(form);
         const groupBadge = group ? `<span class="group-badge">${group}</span>` : '';
-        const posBadge = `<span class="pos-badge pos-${form.pos}">${this.formatPOS(form.pos)}</span>`;
+        const isPassive = (form.categorie || '').includes('_Pass');
+        const posText = this._posLabel(form.pos, form.categorie);
+        const posBadge = `<span class="pos-badge pos-${form.pos}${isPassive ? ' pos-passive' : ''}">${posText}</span>`;
         const glose = this.cleanGlose(form.gloss || form.glose || '');
         const catLabel = this.formatCategorie(form.categorie);
 
@@ -396,70 +566,107 @@ class ArabicAnalyzer {
         }).join('');
     }
 
-    // Détermine le groupe verbal arabe (I à X) depuis le lemme_id ou la catégorie
+    // ── Numéro de forme verbale (I–X) depuis le lemme_id ────────────────────
+    // Principe : le préfixe du lemme_id encode la forme Buckwalter de façon fiable.
+    //   • Forme X  : {iso… / Asto… / <sto…
+    //   • Forme VIII: {i + C1 + ot (C1 immédiatement suivi de sukun+ta)
+    //   • Forme VII : {ino… / Ano…
+    //   • Forme VI  : ta + C + A  (tafāEala — pas de géminée)
+    //   • Forme V   : ta… avec ~  (taFaEEala — géminée sur C2)
+    //   • Forme IV  : > (hamzat al-qat3 initiale)
+    //   • Forme II  : ~ dans les premiers caractères (géminée C2) sans ta-
+    //   • Forme III : C + A au début (sans _V dans cat, pour exclure les creux)
+    //   • Forme I   : défaut
     getVerbGroup(form) {
         const lemme = form.lemme_id || '';
-        const cat = form.categorie || '';
-        const bw = form.forme_buckwalter || '';
+        const cat   = form.categorie || '';
 
-        // Noms dérivés → pas de groupe verbal
-        if (cat.startsWith('N') || cat.startsWith('F') || cat.startsWith('A')) return null;
+        // Noms, adjectifs, mots fonctionnels → pas de groupe verbal
+        if (!cat || cat.startsWith('N') || cat.startsWith('F')) return null;
+        const isVerb = cat.startsWith('PV') || cat.startsWith('IV') || cat.startsWith('CV');
+        if (!isVerb) return null;
 
-        // Forme VI (tafā3al) doit être testée AVANT Forme V (tafa33al)
-        if (/^tadA/.test(lemme) || /^taFA/.test(lemme)) return 'Forme VI';
-        // Forme V (tafa33al / tafā3ala)
-        if (/^ta[A-Za-z]+al_/.test(lemme) || cat.includes('tafa')) return 'Forme V';
-        // Forme IV
-        if (/^>a/.test(lemme)) return 'Forme IV';
-        // Forme VIII (ifta3ala)
-        if (/^i[A-Za-z]ta/.test(lemme)) return 'Forme VIII';
-        // Forme X
-        if (/^sta/.test(lemme)) return 'Forme X';
-        // Forme II (géminée sur C2)
-        if (bw.includes('~') && (cat.startsWith('PV') || cat.startsWith('IV') || cat.startsWith('CV'))) return 'Forme II';
-        // Forme III (allongement après C1)
-        if (/^[a-z]A/.test(bw) && (cat.startsWith('PV') || cat.startsWith('IV') || cat.startsWith('CV'))) return 'Forme III';
-        // Forme I par défaut pour les verbes simples
-        if (cat.startsWith('PV') || cat.startsWith('IV') || cat.startsWith('CV')) return 'Forme I';
+        // Forme X : {isotaFEal
+        if (lemme.startsWith('{iso') || lemme.startsWith('Asto') || lemme.startsWith('<sto'))
+            return 'Forme X';
 
-        return null;
+        // Forme VIII : {iFtaEal → {i + C1 + ot
+        if (/^\{i[a-zA-Z]ot/.test(lemme) || /^A[a-zA-Z]ot/.test(lemme))
+            return 'Forme VIII';
+
+        // Forme VII : {inoFaEal
+        if (lemme.startsWith('{ino') || lemme.startsWith('Ano'))
+            return 'Forme VII';
+
+        // Forme VI : taFAEal → ta + consonne + A (alif long, pas de géminée)
+        if (/^ta[a-zA-Z]A/.test(lemme))
+            return 'Forme VI';
+
+        // Forme V : taFaEEal → ta… avec géminée (~)
+        if (lemme.startsWith('ta') && lemme.includes('~'))
+            return 'Forme V';
+
+        // Forme IV : >aFEal (hamzat al-qat3 préfixe)
+        if (lemme.startsWith('>'))
+            return 'Forme IV';
+
+        // Forme II : FaEEal → géminée ~ (sans préfixe ta-)
+        // La catégorie IV_yu/PV_yu indique aussi la Forme II (inaccompli)
+        if (lemme.includes('~') || cat.startsWith('IV_yu') || cat.startsWith('PV_yu'))
+            return 'Forme II';
+
+        // Forme III : FAEal → consonne + A en position 1-2
+        // Exclure les verbes creux Forme I (cat PV_V / IV_V)
+        if (/^[a-zA-Z]A/.test(lemme) && !cat.includes('_V'))
+            return 'Forme III';
+
+        // Forme I par défaut
+        return 'Forme I';
+    }
+
+    // ── Label POS en tenant compte de la catégorie (actif / passif) ──────────
+    _posLabel(pos, cat) {
+        if (cat) {
+            if (cat.startsWith('PV_Pass') || cat.startsWith('IV_Pass')) return 'Passif';
+            if (cat.startsWith('CV'))  return 'Impératif';
+            if (cat.startsWith('PV'))  return 'Accompli';
+            if (cat.startsWith('IV'))  return 'Inaccompli';
+        }
+        return this.formatPOS(pos);
     }
 
     // Traduit les codes de catégorie Buckwalter en étiquettes lisibles
     formatCategorie(cat) {
         if (!cat) return '';
-        const map = {
-            'PV':           'Verbe accompli',
-            'PV_Pass':      'Accompli passif',
-            'IV':           'Verbe inaccompli',
-            'IV_intr':      'Inaccompli intransitif',
-            'IV_yu':        'Verbe inaccompli',
-            'IV_Pass':      'Inaccompli passif',
-            'IV_Pass_yu':   'Inaccompli passif',
-            'CV':           'Impératif',
-            'CV_intr':      'Impératif',
-            'N':            'Nom',
-            'Np':           'Nom propre',
-            'Nhy':          'Nom (pl. brisé)',
-            'NduAt':        'Nom (duel/plur.)',
-            'Nap':          'Nom d\'action',
-            'A':            'Adjectif',
-            'Ahl':          'Adjectif élatif',
-            'ADJ':          'Adjectif',
-            'CONJ':         'Conjonction',
-            'PREP':         'Préposition',
-            'PART':         'Particule',
-            'PRON':         'Pronom',
-            'INTERJ':       'Interjection',
-            'FUNC_WORD':    'Mot fonctionnel',
-        };
-        if (map[cat]) return map[cat];
-        // Correspondances partielles
-        if (cat.startsWith('PV')) return 'Verbe accompli';
-        if (cat.startsWith('IV')) return 'Verbe inaccompli';
-        if (cat.startsWith('CV')) return 'Impératif';
+        // Correspondances partielles par préfixe (du plus spécifique au plus général)
+        if (cat.startsWith('PV_Pass'))    return 'Accompli passif';
+        if (cat.startsWith('IV_Pass'))    return 'Inaccompli passif';
+        if (cat.startsWith('PV'))         return 'Verbe accompli';
+        if (cat.startsWith('IV'))         return 'Verbe inaccompli';
+        if (cat.startsWith('CV'))         return 'Impératif';
+        // Noms et sous-types
+        if (cat === 'N0_Nh' || cat === 'Nhy') return 'Nom (pluriel brisé)';
+        if (cat.includes('At') || cat === 'NduAt') return 'Nom (pluriel régulier)';
+        if (cat.includes('du') || cat === 'Ndu')   return 'Nom';
+        if (cat === 'N/ap' || cat === 'N-ap')  return 'Participe actif';
+        if (cat === 'Nall')   return 'Adjectif verbal';
+        if (cat === 'Nap' || cat.includes('/ap')) return 'Nom d\'action / participe';
+        if (cat === 'Napdu')  return 'Nom d\'action';
+        if (cat === 'NAt')    return 'Nom (pluriel féminin)';
+        if (cat === 'NF')     return 'Nom (locution)';
+        if (cat === 'Nel')    return 'Élatif (superlatif)';
+        if (cat === 'Ahl')    return 'Élatif';
+        if (cat === 'Nprop' || cat === 'N0') return 'Nom propre';
         if (cat.startsWith('N'))  return 'Nom';
+        // Adjectifs
+        if (cat === 'ADJ')    return 'Adjectif';
         if (cat.startsWith('A'))  return 'Adjectif';
+        // Mots fonctionnels
+        if (cat === 'FUNC_WORD' || cat.startsWith('F')) return 'Mot fonctionnel';
+        if (cat === 'CONJ')   return 'Conjonction';
+        if (cat === 'PREP')   return 'Préposition';
+        if (cat === 'PART')   return 'Particule';
+        if (cat === 'PRON')   return 'Pronom';
         return '';
     }
 
@@ -518,6 +725,7 @@ class ArabicAnalyzer {
         document.getElementById('results').classList.add('hidden');
         document.getElementById('error').classList.add('hidden');
         document.getElementById('favorite-btn')?.classList.add('hidden');
+        document.getElementById('clear-btn')?.classList.add('hidden');
         this.currentResults = null;
     }
 

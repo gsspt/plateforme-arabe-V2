@@ -187,6 +187,82 @@ class ArabicDatabase:
             logger.error(f"❌ Erreur récupération stats: {e}")
             return []
     
+    # Mots courants pour amorcer les suggestions dès le premier caractère
+    _COMMON_WORDS = [
+        'كتب','كتاب','كاتب','مكتوب','كتابة',
+        'خرج','أخرج','خروج','مخرج',
+        'دخل','دخول','مدخل','دخيل',
+        'ذهب','ذهاب',
+        'علم','عالم','معلم','علوم','تعلّم',
+        'قرأ','قراءة','قرآن',
+        'كلّم','كلام','متكلم',
+        'فهم','فاهم','مفهوم',
+        'عرف','معرفة','عارف',
+        'رجع','رجوع','راجع',
+        'جمع','مجموع','اجتماع','اجتمع',
+        'استخرج','استخراج',
+        'تداخل','تعاون','تعلّم',
+        'سأل','سؤال',
+        'بيت','مدرسة',
+        'دخلائه','كتابه',
+    ]
+
+    def get_suggestions(self, prefix, limit=8):
+        """Retourne des suggestions : historique + favoris + mots courants."""
+        seen = []
+        seen_set = set()
+
+        def add(word):
+            if word and word not in seen_set and word != prefix:
+                seen_set.add(word)
+                seen.append(word)
+
+        if not self.conn:
+            # DB non dispo : retomber sur les mots courants seulement
+            for w in self._COMMON_WORDS:
+                if w.startswith(prefix):
+                    add(w)
+            return seen[:limit]
+
+        try:
+            cursor = self.conn.cursor()
+
+            # 1. Historique — trié par fréquence
+            cursor.execute('''
+                SELECT word_arabic, COUNT(*) as freq
+                FROM search_history
+                WHERE word_arabic LIKE ? AND word_arabic != ?
+                GROUP BY word_arabic
+                ORDER BY freq DESC, created_at DESC
+                LIMIT ?
+            ''', (prefix + '%', prefix, limit))
+            for row in cursor.fetchall():
+                add(row['word_arabic'])
+
+            # 2. Favoris
+            if len(seen) < limit:
+                cursor.execute('''
+                    SELECT word_arabic FROM favorites
+                    WHERE word_arabic LIKE ? AND word_arabic != ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                ''', (prefix + '%', prefix, limit - len(seen)))
+                for row in cursor.fetchall():
+                    add(row['word_arabic'])
+
+            # 3. Mots courants intégrés (complètent si toujours insuffisant)
+            if len(seen) < limit:
+                for w in self._COMMON_WORDS:
+                    if w.startswith(prefix):
+                        add(w)
+                    if len(seen) >= limit:
+                        break
+
+        except Exception as e:
+            logger.error(f"❌ Erreur suggestions: {e}")
+
+        return seen[:limit]
+
     def close(self):
         """Ferme la connexion à la base de données"""
         if self.conn:

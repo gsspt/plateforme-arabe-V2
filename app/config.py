@@ -4,9 +4,15 @@ import os
 if os.path.exists('.env'):
     from dotenv import load_dotenv
     load_dotenv()
-    print("🔧 Mode développement: .env chargé")
+    try:
+        print("\U0001f527 Mode développement: .env chargé")
+    except UnicodeEncodeError:
+        print("Mode developpement: .env charge")
 else:
-    print("🌐 Mode production: variables d'environnement système")
+    try:
+        print("\U0001f310 Mode production: variables d'environnement système")
+    except UnicodeEncodeError:
+        print("Mode production: variables d'environnement systeme")
 
 class Config:
     """Configuration centrale de l'application"""
@@ -36,25 +42,32 @@ class Config:
     DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
     @classmethod
+    def _say(cls, msg):
+        try:
+            print(msg)
+        except UnicodeEncodeError:
+            import unicodedata
+            print(''.join(c if ord(c) < 128 else '?' for c in msg))
+
+    @classmethod
     def validate_configuration(cls):
         """Validation non-bloquante pour la production"""
-        print("🔍 Validation de la configuration...")
-        
+        cls._say("🔍 Validation de la configuration...")
+
         if cls.GOOGLE_API_KEY:
-            print("✅ Google Vision API: CONFIGURÉE")
+            cls._say("✅ Google Vision API: CONFIGURÉE")
         else:
-            print("⚠️  Google Vision API: NON CONFIGURÉE (OCR désactivé)")
-            
+            cls._say("⚠️  Google Vision API: NON CONFIGURÉE (OCR désactivé)")
+
         if cls.DEEPSEEK_API_KEY:
-            print("✅ DeepSeek Translation API: CONFIGURÉE")
+            cls._say("✅ DeepSeek Translation API: CONFIGURÉE")
         else:
-            print("⚠️  DeepSeek Translation API: NON CONFIGURÉE (Traduction désactivée)")
-        
-        # Vérification des fichiers de données
+            cls._say("⚠️  DeepSeek Translation API: NON CONFIGURÉE (Traduction désactivée)")
+
         if os.path.exists(cls.BUCKWALTER_DATA_PATH):
-            print("✅ Données Buckwalter: PRÉSENTES")
+            cls._say("✅ Données Buckwalter: PRÉSENTES")
         else:
-            print("❌ Données Buckwalter: MANQUANTES")
-        
-        print("✅ Validation terminée")
+            cls._say("❌ Données Buckwalter: MANQUANTES")
+
+        cls._say("✅ Validation terminée")
         return True
