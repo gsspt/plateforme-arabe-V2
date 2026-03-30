@@ -422,7 +422,7 @@ class ArabicAnalyzer {
         if (form.suffixe_ar)  parts.push(`<span class="morph-part morph-suffix" title="${suffixeGlose || 'Suffixe'}">${form.suffixe_ar}</span>`);
         const decompCell = parts.length > 1
             ? `<span class="morph-breakdown">${parts.join('<span class="morph-sep">·</span>')}</span>`
-            : (form.forme_complete || '');
+            : (form.forme_arabe || '');
 
         return `
             <tr class="analysis-row decomp-row${isPassive ? ' passive-row' : ''}" data-pos="${form.pos}">
@@ -683,6 +683,7 @@ class ArabicAnalyzer {
             'NOUN': 'Nom',
             'NOUN_PROP': 'Nom propre',
             'ADJ': 'Adjectif',
+            'MASDAR': 'Masdar',
             'FUNC_WORD': 'Fonctionnel',
             'UNKNOWN': 'Inconnu'
         };

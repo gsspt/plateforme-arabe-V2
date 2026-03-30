@@ -199,7 +199,26 @@ class MorphologicalAnalyzer:
                 analyses.append(analyse)
 
         analyses = self._disambiguer_alif_wasl(mot_buckwalter, analyses)
+        analyses = self._dedupliquer_analyses(analyses)
         return self._trier_analyses(analyses)
+
+    def _dedupliquer_analyses(self, analyses):
+        """Retire les entrées en double : même forme arabe + même catégorie.
+
+        Les verbes défectifs ont parfois deux lemmes distincts (ex. ma$aY-i_1 et
+        ma$~aY_1) qui produisent la même forme vocalisée et la même catégorie,
+        affichant des lignes identiques dans l'interface. On garde la première
+        occurrence (triée par ordre d'insertion, donc l'analyse principale).
+        """
+        vus = set()
+        uniques = []
+        for a in analyses:
+            cle = (a.get('forme_arabe', ''), a.get('categorie', ''))
+            if cle in vus:
+                continue
+            vus.add(cle)
+            uniques.append(a)
+        return uniques
 
     def _trier_analyses(self, analyses):
         """Trie les analyses par priorité POS : noms/adjectifs courants > verbes"""
@@ -245,7 +264,7 @@ class MorphologicalAnalyzer:
         return prioritaires + secondaires
     
     def _trouver_racines_par_mot(self, mot_buckwalter, analyses):
-        """Trouve toutes les racines contenant le mot donné"""
+        """Trouve toutes les racines contenant le mot donné."""
         racines_trouvees = set()
 
         for racine, lemmes in self.structure_racines_complete.items():
@@ -598,6 +617,21 @@ class MorphologicalAnalyzer:
 
         logger.info(f"🔧 {len(regles_compat)} règles compat + {nb_cv} entrées CV ajoutées en mémoire")
 
+        # Corrections manuelles de racines pour des lemmes mal classés dont
+        # les algorithmes automatiques ne peuvent pas inférer la racine correcte
+        # (racine inexistante dans le dict, ou ambiguïté irréductible).
+        corrections_racines = [
+            # (lemme_id_exact, racine_source_actuelle, racine_cible)
+            # إنسان est stocké sous AnA (أنا) alors que sa racine est Ans (أنس)
+            ("<inosAn_1", "AnA", "Ans"),
+        ]
+        for lemme_id, src, dst in corrections_racines:
+            src_dict = self.structure_racines_complete.get(src)
+            if src_dict and lemme_id in src_dict:
+                if dst not in self.structure_racines_complete:
+                    self.structure_racines_complete[dst] = {}
+                self.structure_racines_complete[dst][lemme_id] = src_dict.pop(lemme_id)
+
         self._reattacher_racines_depuis_verbes()
 
     def _reattacher_racines_depuis_verbes(self):
@@ -637,32 +671,67 @@ class MorphologicalAnalyzer:
         # ── Passe 1 : lemmes verbaux ──────────────────────────────────────────
         a_deplacer = {}  # lemme_id → (racine_source, vraie_racine)
 
+        def _deduire_racine_depuis_cle_longue(sk):
+            """Tente de déduire une racine triconsonantique depuis une clé de 4-6 lettres.
+
+            Patrons traités (Buckwalter, après retrait voyelles) :
+            • Form VI  tC1AC2C3  → C1C2C3   (tbAdl → bdl, tEAwn → Ewn)
+            • Form VII <nC1C2C3 / AnC1C2C3 → C1C2C3 (Anksr → ksr)
+            • Form VIII <C1tC2C3 / AC1tC2C3 → C1C2C3 (<jtmE → jmE, A$try → $ry)
+            • Form X   <stC1C2C3 / AstC1C2C3 → C1C2C3 (<stqbl → qbl)
+            • Form II/V nominal t+C1C2~C3 → C1C2C3 (tb+diacr ignoré par _sk)
+            """
+            # Form VI : t + C1 + A + C2 + C3
+            if len(sk) == 5 and sk[0] == 't' and sk[2] == 'A':
+                return sk[1] + sk[3] + sk[4]
+            # Form VI défective : t + C1 + A + C2 + y  (tEAwy → Ewy)
+            if len(sk) == 5 and sk[0] == 't' and sk[2] == 'A':
+                return sk[1] + sk[3] + sk[4]
+            # Form VII : < ou A + n + C1 + C2 + C3
+            if len(sk) == 5 and sk[0] in ('<', 'A') and sk[1] == 'n':
+                return sk[2] + sk[3] + sk[4]
+            # Form VIII : < ou A + C1 + t + C2 + C3
+            # Guard : si sk[1]='s', ambigu avec Form X creux (<st+C1+C3) → ne pas déduire
+            if len(sk) == 5 and sk[0] in ('<', 'A') and sk[2] == 't' and sk[1] != 's':
+                return sk[1] + sk[3] + sk[4]
+            # Form VIII défective : < + C1 + t + C2 + y  (même longueur 5, déjà couverte)
+            # Form X : < ou A + s + t + C1 + C2 + C3
+            if len(sk) == 6 and sk[0] in ('<', 'A') and sk[1] == 's' and sk[2] == 't':
+                return sk[3] + sk[4] + sk[5]
+            # Form X défective : A + s + t + C1 + C2 + y (6 lettres, couverte ci-dessus)
+            return None
+
         def _vraie_racine_verbale(formes):
             """Détermine la vraie racine d'un lemme verbal par vote majoritaire.
 
             Stratégie :
-            1. On compte combien d'entrées verbales à 3 lettres pointent vers chaque
-               clé consonantique (après normalisation Y→y et retrait des voyelles).
-               On exclut PV_V/IV_V (géminés, clé à 2 lettres) au premier passage.
-            2. La clé gagnante est celle qui a le plus de votes.
-               En cas d'égalité parfaite on abandonne (retour None).
+            1. Clés à 3 lettres : vote direct.
+            2. Clés à 4-6 lettres : on tente la déduction via _deduire_racine_depuis_cle_longue.
+            3. La clé gagnante est celle avec le plus de votes.
+               En cas d'égalité on abandonne (return None).
 
-            Ce vote résout le cas des verbes défectueux : la forme PV_h (بكاه)
-            génère une clé spurieuse 'bkA' alors que les formes PV_0, PV_Atn,
-            IV_0hAnn génèrent toutes 'bky' → majorité pour 'bky'.
+            Résout :
+            • Verbes défectifs (PV_h génère bkA spurieux → majorité bky)
+            • Formes VI (tbAdl → bdl), VIII (A$trY → $ry), VII/X
             """
             from collections import Counter
             votes = Counter()
             for forme in formes:
                 cat = forme.get('categorie', '')
-                if (cat.startswith(('PV', 'IV', 'CV'))
-                        and not cat.startswith(('PV_V', 'IV_V'))):
-                    sk = _sk(forme['entree'])
-                    if len(sk) == 3:
-                        votes[sk] += 1
+                if not cat.startswith(('PV', 'IV', 'CV')):
+                    continue
+                if cat.startswith(('PV_V', 'IV_V')):
+                    continue  # géminés en 1er passage
+                sk = _sk(forme['entree'])
+                if len(sk) == 3:
+                    votes[sk] += 1
+                elif len(sk) in (4, 5, 6):
+                    racine = _deduire_racine_depuis_cle_longue(sk)
+                    if racine and len(racine) == 3:
+                        votes[racine] += 1
 
             if not votes:
-                # 2e tentative : accepter aussi PV_V / IV_V
+                # 2e tentative : accepter aussi PV_V / IV_V (géminés)
                 for forme in formes:
                     cat = forme.get('categorie', '')
                     if cat.startswith(('PV', 'IV', 'CV')):
@@ -672,7 +741,6 @@ class MorphologicalAnalyzer:
 
             if not votes:
                 return None
-            # Prendre la clé la plus votée ; en cas d'égalité, abandonner
             top = votes.most_common(2)
             if len(top) >= 2 and top[0][1] == top[1][1]:
                 return None  # égalité → incertain
@@ -700,6 +768,101 @@ class MorphologicalAnalyzer:
         racines_connues = frozenset(self.structure_racines_complete.keys())
         a_deplacer2 = {}
 
+        def _check(c, racines_connues, racine_src):
+            """Retourne c si c'est une racine valide différente de la source, sinon None."""
+            return c if (len(c) == 3 and c in racines_connues and c != racine_src) else None
+
+        def _candidat_nominal(cle_courte, racine_src, racines_connues):
+            """Tente de déduire la racine depuis la clé consonantique d'un lemme nominal.
+
+            Règles (par ordre de priorité) :
+            1. Clé exacte à 3 lettres connue → racine directe.
+            2. Clé à 2 lettres → expansion géminée C1C2 → C1C2C2.
+            3. Masdar Form II (tafCiil / tafCiya) : t+C1+C2+y+C3 (len=5, sk[3]='y').
+               Garde : si l'un des deux candidats = racine_src, le lemme est déjà
+               bien placé → on ne déplace pas (évite de corrompre les racines saines).
+               - Dernier car = 't' (masdar défectif) → priorité à C1C2y (skip t final)
+               - Sinon → priorité à C1C2C3 (skip y)
+            4. PA/PP Form VII : m+n+C1+C2+C3 sans mater dans C1-C3 (len=5).
+               La condition "sans mater" distingue منكسر (Form VII : n infixal)
+               de منظار (miFCaaL : n est une consonne de la racine nZr).
+            5. Masdar Form X racine creuse : <st/Ast+C1+A+C2 (len=6, sk[4]='A')
+               → essai C1w C2 puis C1y C2.
+            6. Retrait d'une mater lectionis (A/w/y) en position > 0.
+            7. Patrons généraux Form VI/VII/VIII/X via _deduire_racine_depuis_cle_longue.
+            """
+            # Normalisation : ة (p) en fin de mot est un suffixe féminin, pas une radicale
+            if cle_courte.endswith('p'):
+                cle_courte = cle_courte[:-1]
+
+            if len(cle_courte) == 3:
+                return _check(cle_courte, racines_connues, racine_src)
+
+            if len(cle_courte) == 2:
+                return _check(cle_courte + cle_courte[-1], racines_connues, racine_src)
+
+            if len(cle_courte) < 2:
+                return None
+
+            # ── Masdar Form II : t + C1 + C2 + y + C3 ────────────────────────
+            if len(cle_courte) == 5 and cle_courte[0] == 't' and cle_courte[3] == 'y':
+                cand_nd  = cle_courte[1] + cle_courte[2] + cle_courte[4]  # sain : skip y
+                cand_def = cle_courte[1] + cle_courte[2] + cle_courte[3]  # défectif : skip t final
+                # Garde : si le lemme est déjà sous le bon candidat, ne pas déplacer
+                if cand_nd == racine_src or cand_def == racine_src:
+                    return None
+                # Dernier = 't' → probable défectif (تبكيت) → priorité C1C2y
+                candidates = [cand_def, cand_nd] if cle_courte[4] == 't' else [cand_nd, cand_def]
+                for cand in candidates:
+                    r = _check(cand, racines_connues, racine_src)
+                    if r:
+                        return r
+
+            # ── PA/PP Form VII : m + n + C1 + C2 + C3 (sans mater dans C1-C3) ──
+            if (len(cle_courte) == 5
+                    and cle_courte[0] == 'm'
+                    and cle_courte[1] == 'n'
+                    and not any(c in _MATRES for c in cle_courte[2:])):
+                r = _check(cle_courte[2] + cle_courte[3] + cle_courte[4], racines_connues, racine_src)
+                if r:
+                    return r
+
+            # ── Masdar Form X racine creuse : Ast/<st + C1 + A + C2 ──────────
+            if (len(cle_courte) == 6
+                    and cle_courte[0] in ('<', 'A')
+                    and cle_courte[1] == 's'
+                    and cle_courte[2] == 't'
+                    and cle_courte[4] == 'A'):
+                c1, c2 = cle_courte[3], cle_courte[5]
+                # Garde : si racine_src est déjà C1+w/y+C2, le lemme est bien placé
+                if (len(racine_src) == 3
+                        and racine_src[0] == c1
+                        and racine_src[2] == c2
+                        and racine_src[1] in ('w', 'y')):
+                    return None  # déjà correctement placé, ne pas déplacer
+                else:
+                    for mid in ('w', 'y'):
+                        r = _check(c1 + mid + c2, racines_connues, racine_src)
+                        if r:
+                            return r
+
+            # ── Retrait de mater lectionis (position > 0) ────────────────────
+            for i, c in enumerate(cle_courte):
+                if c in _MATRES and i > 0:
+                    candidate = cle_courte[:i] + cle_courte[i + 1:]
+                    r = _check(candidate, racines_connues, racine_src)
+                    if r:
+                        return r
+
+            # ── Patrons généraux Form VI/VII/VIII/X ───────────────────────────
+            if len(cle_courte) in (4, 5, 6):
+                racine = _deduire_racine_depuis_cle_longue(cle_courte)
+                r = _check(racine, racines_connues, racine_src) if racine else None
+                if r:
+                    return r
+
+            return None
+
         for racine_src, lemmes in self.structure_racines_complete.items():
             for lemme_id, formes in lemmes.items():
                 # Ignorer les lemmes avec des entrées verbales
@@ -712,24 +875,9 @@ class MorphologicalAnalyzer:
                 # Clé la plus courte (après stripping voyelles)
                 cle_courte = min((_sk(f['entree']) for f in formes), key=len)
 
-                # Cas exact à 3 lettres : si c'est une racine connue ≠ source
-                if len(cle_courte) == 3:
-                    if cle_courte in racines_connues and cle_courte != racine_src:
-                        a_deplacer2[lemme_id] = (racine_src, cle_courte)
-                    continue
-
-                if len(cle_courte) < 3:
-                    continue
-
-                # Cas 4+ lettres : essayer de retirer chaque mater
-                for i, c in enumerate(cle_courte):
-                    if c in _MATRES and i > 0:
-                        candidate = cle_courte[:i] + cle_courte[i + 1:]
-                        if (len(candidate) == 3
-                                and candidate in racines_connues
-                                and candidate != racine_src):
-                            a_deplacer2[lemme_id] = (racine_src, candidate)
-                            break
+                candidat = _candidat_nominal(cle_courte, racine_src, racines_connues)
+                if candidat:
+                    a_deplacer2[lemme_id] = (racine_src, candidat)
 
         n2 = 0
         for lemme_id, (src, dst) in a_deplacer2.items():
@@ -761,6 +909,10 @@ class MorphologicalAnalyzer:
         elif categorie.startswith('N'):
             if glose_pos and glose_pos[0].isupper():
                 return "NOUN_PROP"
+            elif categorie == 'Nall':
+                return "ADJ"  # adjectif verbal (Buckwalter Nall = verbal adjective)
+            elif self._est_masdar(vocalise, categorie):
+                return "MASDAR"
             elif self._est_adjectif_par_pattern(vocalise, categorie, glose_pos):
                 return "ADJ"
             else:
@@ -787,23 +939,83 @@ class MorphologicalAnalyzer:
                 return pos_content.split('/')[0] if '/' in pos_content else pos_content
         return None
     
+    # Consonnes BW (tout sauf voyelles, diacritiques et espace)
+    _BW_CONS = re.compile(r'[^aouiAwyFNK~\s]')
+
+    @staticmethod
+    def _est_masdar(vocalise, categorie):
+        """Détecte si un nom est un masdar (nom verbal) par son schème vocalique BW.
+
+        Couvre les formes II–X (patterns réguliers). La forme I est hétérogène
+        et n'est pas traitée ici.
+        Retourne True uniquement pour les catégories nominales.
+        """
+        if not vocalise or not categorie:
+            return False
+        # Seules les entrées nominales peuvent être des masdars
+        if not categorie.startswith('N'):
+            return False
+        # N/ap et N-ap = formes de type participe actif → pas des masdars
+        if categorie in ('N/ap', 'N-ap'):
+            return False
+        v = vocalise
+
+        # Form X  : {isot… / <sot… / Asot…
+        if re.match(r'^\{isot|^<sot|^Asot', v):
+            return True
+        # Form VIII : {i + consonne(s) + ot + …  ({ijotimAE …)
+        if re.match(r'^\{i[^aouiAwyFNK~\s]{1,2}ot', v):
+            return True
+        # Form VII : {in + sukun(o) + consonne + …  ({inokisAr, {inoqilAb …)
+        if re.match(r'^\{ino[^aouiAwyFNK~\s]', v) and len(v) > 6:
+            return True
+        # Form VI  : tafA + consonne + …
+        if re.match(r'^tafA[^aouiAwyFNK~\s]', v):
+            return True
+        # Form V   : tafa + consonne + ~ (géminé)
+        if re.match(r'^tafa[^aouiAwyFNK~\s]', v) and '~' in v:
+            return True
+        # Form IV  : < / > / { + i + consonne + o + consonne + …  (<ixorAj, >irosAl …)
+        if (re.match(r'^[<>{][ia][^aouiAwyFNK~\s]+o[^aouiAwyFNK~\s]', v)
+                and not re.match(r'^\{ino', v)    # déjà Form VII
+                and not re.match(r'^\{isot', v)   # déjà Form X
+                and not re.match(r'^\{i[^aouiAwyFNK~\s]{1,2}ot', v)   # déjà Form VIII
+                and not v.endswith('An')):  # exclure إنسان (fiCCān) — garder إنتاج, إخراج…
+            return True
+        # Form III : mu + C1 + A + … + a + C_final  (mukAtab, muqAwam, mu$Awar …)
+        # Critère distinctif masdar vs participe actif : 'a' bref avant la consonne finale
+        # Participe actif Form III : …im (bref 'i' avant C finale)
+        if re.match(r'^mu[^aouiAwyFNK~\s]A.+a[^aouiAwyFNK~\s]$', v):
+            return True
+        # Form II  : ta + C1 + o + (w/y)? + C2? + iy + C3
+        #   – normal    : taEoliym, tabokiyt, taSobiyr
+        #   – creux     : taSowiyr  (ta+S+o+w+iy+r)
+        #   – assimilé  : tawoziyE  (ta+w+o+z+iy+E)
+        if re.match(r'^ta.{1,3}o[wy]?[^aouiAwyFNK~\s]*iy[^aouiAwyFNK~\s]', v):
+            return True
+
+        return False
+
     def _est_adjectif_par_pattern(self, vocalise, categorie, glose):
         """Détecte les adjectifs par patterns"""
         if not vocalise:
             return False
-        
+
+        # Nisba (adjectif relationnel) : finit en iy~ ou iy
         if vocalise.endswith('iy~') or vocalise.endswith('iy'):
             return True
-        
-        if categorie.startswith('N') and any(pattern in vocalise for pattern in ['mu', 'ma', 'mun', 'man']):
+
+        # Patron faCiyl (فَعِيل) : C + a + C + iy + C  — kabiyr, Sagiyr, jamiyl, kariym …
+        if re.match(r'^[^aouiAwyFNK~\s]a[^aouiAwyFNK~\s]iy[^aouiAwyFNK~\s]$', vocalise):
             return True
-        
+
+        # Élatif : >aFCaL / >aFC (superlatif, très court)
         if vocalise.startswith(('>a', 'A')) and len(vocalise) <= 6:
             return True
-        
+
         if glose and any(mot in glose.lower() for mot in ['adjective', 'adj', 'adjectival']):
             return True
-        
+
         return False
     
     def _nettoyer_glose(self, glose_pos):

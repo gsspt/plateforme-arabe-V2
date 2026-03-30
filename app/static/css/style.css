@@ -215,6 +215,7 @@ body {
 .pos-badge.pos-VERB_IMPERATIVE { color: #5c2a00; border-color: #a0522d; }
 .pos-badge.pos-NOUN            { color: #1a3d2b; border-color: #4a7c5e; }
 .pos-badge.pos-NOUN_PROP       { color: #1a3d2b; border-color: #4a7c5e; }
+.pos-badge.pos-MASDAR          { color: #5a2d00; border-color: #a0622d; background-color: rgba(160, 98, 45, 0.08); }
 .pos-badge.pos-ADJ             { color: #1e2d5c; border-color: #3d5a9e; }
 .pos-badge.pos-FUNC_WORD       { color: #4a3060; border-color: #7a5a9e; }
 .pos-badge                     { color: var(--text-lighter); border-color: var(--border-color); }
